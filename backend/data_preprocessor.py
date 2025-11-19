@@ -177,6 +177,21 @@ class DataPreprocessor:
                         [(recipe_id, tid) for tid in tag_ids]
                     )
 
+            # Build and set denormalized search_text (name + ingredients + tags)
+            try:
+                name_part = (row.get('name') or '').lower().strip()
+                ing_part = ' '.join([i.lower().strip() for i in row.get('ingredients', []) if i])
+                tag_part = ' '.join([t.lower().strip() for t in row.get('tags', []) if t])
+                search_text = ' '.join([p for p in [name_part, ing_part, tag_part] if p])
+
+                if search_text:
+                    cursor.execute(
+                        "UPDATE recipes SET search_text = %s WHERE id = %s",
+                        (search_text[:65535], recipe_id)
+                    )
+            except Exception:
+                pass
+
             # Insert steps (batch)
             if row['steps']:
                 steps_data = []

@@ -18,6 +18,8 @@ class Database:
         # Bounded LRU cache for search/batch results
         self._cache_maxsize = int(os.getenv('SEARCH_CACHE_MAXSIZE', '256'))
         self.search_cache = OrderedDict()
+        # Cache for fulltext availability checks per table
+        self._fts_cache = {}
         # MySQL connection pool
         self.pool_name = os.getenv('DB_POOL_NAME', 'recipe_pool')
         self.pool_size = int(os.getenv('DB_POOL_SIZE', '8'))
@@ -73,6 +75,67 @@ class Database:
                 pass
             finally:
                 self.connection = None
+
+    def _supports_fulltext_on(self, table_name: str) -> bool:
+        """Check (and cache) whether a table has a FULLTEXT index.
+
+        Uses INFORMATION_SCHEMA.STATISTICS to detect any FULLTEXT index on the
+        specified table. Returns False on error (safe fallback).
+        """
+        if table_name in self._fts_cache:
+            return self._fts_cache[table_name]
+
+        try:
+            sql = ("SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.STATISTICS "
+                   "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND INDEX_TYPE='FULLTEXT'")
+            rows = self.execute_query(sql, (self.database, table_name), fetch=True)
+            has = bool(rows and rows[0].get('cnt', 0) > 0)
+        except Exception:
+            has = False
+
+        self._fts_cache[table_name] = has
+        return has
+
+    def _has_column(self, table_name: str, column_name: str) -> bool:
+        """Check whether a given column exists on a table."""
+        try:
+            sql = ("SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS "
+                   "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND COLUMN_NAME=%s")
+            rows = self.execute_query(sql, (self.database, table_name, column_name), fetch=True)
+            return bool(rows and rows[0].get('cnt', 0) > 0)
+        except Exception:
+            return False
+
+    def _fulltext_index_covers(self, table_name: str, columns: tuple) -> bool:
+        """Return True if any FULLTEXT index on `table_name` covers the given columns.
+
+        `columns` should be a tuple of column names in the order expected. This method
+        checks INFORMATION_SCHEMA.STATISTICS for FULLTEXT indexes and compares the
+        ordered concatenated column list against the requested columns.
+        """
+        try:
+            # Get index->columns for FULLTEXT indexes on the table
+            sql = ("SELECT INDEX_NAME, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') as cols "
+                   "FROM INFORMATION_SCHEMA.STATISTICS "
+                   "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND INDEX_TYPE='FULLTEXT' "
+                   "GROUP BY INDEX_NAME")
+            rows = self.execute_query(sql, (self.database, table_name), fetch=True)
+
+            if not rows:
+                return False
+
+            requested = ','.join(columns)
+            for r in rows:
+                cols = r.get('cols') or ''
+                # Exact match or superset (requested cols all present in index cols)
+                # We'll treat index that contains requested columns (in any order) as valid.
+                idx_cols_set = set([c.strip().lower() for c in cols.split(',') if c.strip()])
+                req_cols_set = set([c.strip().lower() for c in requested.split(',') if c.strip()])
+                if req_cols_set.issubset(idx_cols_set):
+                    return True
+            return False
+        except Exception:
+            return False
 
     def execute_query(self, query, params=None, fetch=False):
         """Execute a database query with retry on connection failure"""
@@ -212,21 +275,28 @@ class Database:
         if max_ingredients is not None:
             having_filters.append(f'COUNT(DISTINCT ri.ingredient_id) <= {max_ingredients}')
         
-        if search_type == 'name':
-            # Build OR conditions for each word
-            where_conditions = ' OR '.join(['r.name LIKE %s'] * len(query_words))
-            
-            # Add additional filters
-            if additional_filters:
-                where_conditions = f"({where_conditions}) AND " + ' AND '.join(additional_filters)
-            
-            # Build HAVING clause
+        # Two-step search: first find matching recipe IDs (fast), then batch-fetch details
+        def _build_fts_query(words):
+            # Build boolean-mode fulltext query requiring each word
+            return ' '.join('+' + w for w in words)
+
+        def _fetch_details_for_ids(id_list):
+            if not id_list:
+                return []
+
+            placeholders = ','.join(['%s'] * len(id_list))
+
             having_clause = ''
             if having_filters:
                 having_clause = 'HAVING ' + ' AND '.join(having_filters)
-            
+
+            # Apply additional filters to WHERE (they refer to r or n)
+            additional_where = ''
+            if additional_filters:
+                additional_where = ' AND ' + ' AND '.join(additional_filters)
+
             sql = f"""
-                SELECT 
+                SELECT
                     r.id, r.name, r.minutes,
                     GROUP_CONCAT(DISTINCT i.name ORDER BY i.name SEPARATOR '|') as ingredients,
                     GROUP_CONCAT(DISTINCT t.name ORDER BY t.name SEPARATOR '|') as tags,
@@ -237,79 +307,152 @@ class Database:
                 LEFT JOIN ingredients i ON ri.ingredient_id = i.id
                 LEFT JOIN recipe_tags rt ON r.id = rt.recipe_id
                 LEFT JOIN tags t ON rt.tag_id = t.id
-                WHERE {where_conditions}
+                WHERE r.id IN ({placeholders}){additional_where}
                 GROUP BY r.id, r.name, r.minutes, n.calories
                 {having_clause}
                 ORDER BY r.name
                 LIMIT %s
             """
-            params = tuple([f'%{word}%' for word in query_words] + additional_params + [limit])
-            
-        elif search_type == 'ingredient':
-            # Build OR conditions for each word
-            where_conditions = ' OR '.join(['i.name LIKE %s'] * len(query_words))
-            
-            # Add additional filters
-            if additional_filters:
-                where_conditions = f"({where_conditions}) AND " + ' AND '.join(additional_filters)
-            
-            # Build HAVING clause
-            having_clause = ''
-            if having_filters:
-                having_clause = 'HAVING ' + ' AND '.join(having_filters)
-            
-            sql = f"""
-                SELECT DISTINCT
-                    r.id, r.name, r.minutes,
-                    GROUP_CONCAT(DISTINCT i.name ORDER BY i.name SEPARATOR '|') as ingredients,
-                    GROUP_CONCAT(DISTINCT t.name ORDER BY t.name SEPARATOR '|') as tags,
-                    n.calories
-                FROM recipes r
-                JOIN recipe_ingredients ri ON r.id = ri.recipe_id
-                JOIN ingredients i ON ri.ingredient_id = i.id
-                LEFT JOIN nutrition n ON r.id = n.recipe_id
-                LEFT JOIN recipe_tags rt ON r.id = rt.recipe_id
-                LEFT JOIN tags t ON rt.tag_id = t.id
-                WHERE {where_conditions}
-                GROUP BY r.id, r.name, r.minutes, n.calories
-                {having_clause}
-                ORDER BY r.name
-                LIMIT %s
-            """
-            params = tuple([f'%{word}%' for word in query_words] + additional_params + [limit])
-            
-        else:  # cuisine
-            # Build OR conditions for each word
-            where_conditions = ' OR '.join(['t.name LIKE %s'] * len(query_words))
-            
-            # Add additional filters
-            if additional_filters:
-                where_conditions = f"({where_conditions}) AND " + ' AND '.join(additional_filters)
-            
-            # Build HAVING clause
-            having_clause = ''
-            if having_filters:
-                having_clause = 'HAVING ' + ' AND '.join(having_filters)
-            
-            sql = f"""
-                SELECT 
-                    r.id, r.name, r.minutes,
-                    GROUP_CONCAT(DISTINCT i.name ORDER BY i.name SEPARATOR '|') as ingredients,
-                    GROUP_CONCAT(DISTINCT t.name ORDER BY t.name SEPARATOR '|') as tags,
-                    n.calories
-                FROM recipes r
-                JOIN recipe_tags rt ON r.id = rt.recipe_id
-                JOIN tags t ON rt.tag_id = t.id
-                LEFT JOIN nutrition n ON r.id = n.recipe_id
-                LEFT JOIN recipe_ingredients ri ON r.id = ri.recipe_id
-                LEFT JOIN ingredients i ON ri.ingredient_id = i.id
-                WHERE {where_conditions}
-                GROUP BY r.id, r.name, r.minutes, n.calories
-                {having_clause}
-                ORDER BY r.name
-                LIMIT %s
-            """
-            params = tuple([f'%{word}%' for word in query_words] + additional_params + [limit])
+
+            params = tuple(id_list) + tuple(additional_params) + (limit,)
+            return self.execute_query(sql, params, fetch=True)
+
+        id_list = []
+
+        try:
+            # Try to use FULLTEXT for recipe name/description searches
+            if search_type == 'name':
+                fts = _build_fts_query(query_words)
+                # Prefer denormalized `search_text` fulltext if present
+                if self._has_column('recipes', 'search_text') and self._supports_fulltext_on('recipes'):
+                    id_rows = self.execute_query(
+                        "SELECT id FROM recipes WHERE MATCH(search_text) AGAINST(%s IN BOOLEAN MODE) LIMIT %s",
+                        (fts, limit),
+                        fetch=True
+                    )
+                    id_list = [r['id'] for r in id_rows] if id_rows else []
+                # Fall back to MATCH(name,description) if a fulltext index exists
+                elif self._supports_fulltext_on('recipes'):
+                    id_rows = self.execute_query(
+                        "SELECT id FROM recipes WHERE MATCH(name,description) AGAINST(%s IN BOOLEAN MODE) LIMIT %s",
+                        (fts, limit),
+                        fetch=True
+                    )
+                    id_list = [r['id'] for r in id_rows] if id_rows else []
+                else:
+                    # Fall back to LIKE-based id search
+                    like_params = tuple([f'%{w}%' for w in query_words] + [limit])
+                    like_where = ' OR '.join(['r.name LIKE %s'] * len(query_words))
+                    sql_ids = f"SELECT DISTINCT r.id FROM recipes r WHERE ({like_where}) LIMIT %s"
+                    id_rows = self.execute_query(sql_ids, like_params, fetch=True)
+                    id_list = [r['id'] for r in id_rows] if id_rows else []
+
+            elif search_type == 'ingredient':
+                # Try fulltext on ingredients
+                fts = _build_fts_query(query_words)
+                # Prefer fulltext on ingredients if available
+                if self._supports_fulltext_on('ingredients'):
+                    rows = self.execute_query(
+                        "SELECT DISTINCT ri.recipe_id as id FROM ingredients i JOIN recipe_ingredients ri ON i.id=ri.ingredient_id WHERE MATCH(i.name) AGAINST(%s IN BOOLEAN MODE) LIMIT %s",
+                        (fts, limit),
+                        fetch=True
+                    )
+                    id_list = [r['id'] for r in rows] if rows else []
+                else:
+                    like_where = ' OR '.join(['i.name LIKE %s'] * len(query_words))
+                    params = tuple([f'%{w}%' for w in query_words] + [limit])
+                    sql = f"SELECT DISTINCT ri.recipe_id as id FROM ingredients i JOIN recipe_ingredients ri ON i.id=ri.ingredient_id WHERE ({like_where}) LIMIT %s"
+                    rows = self.execute_query(sql, params, fetch=True)
+                    id_list = [r['id'] for r in rows] if rows else []
+
+            else:  # cuisine/tag search
+                fts = _build_fts_query(query_words)
+                if self._supports_fulltext_on('tags'):
+                    rows = self.execute_query(
+                        "SELECT DISTINCT rt.recipe_id as id FROM tags t JOIN recipe_tags rt ON t.id=rt.tag_id WHERE MATCH(t.name) AGAINST(%s IN BOOLEAN MODE) LIMIT %s",
+                        (fts, limit),
+                        fetch=True
+                    )
+                    id_list = [r['id'] for r in rows] if rows else []
+                else:
+                    like_where = ' OR '.join(['t.name LIKE %s'] * len(query_words))
+                    params = tuple([f'%{w}%' for w in query_words] + [limit])
+                    sql = f"SELECT DISTINCT rt.recipe_id as id FROM tags t JOIN recipe_tags rt ON t.id=rt.tag_id WHERE ({like_where}) LIMIT %s"
+                    rows = self.execute_query(sql, params, fetch=True)
+                    id_list = [r['id'] for r in rows] if rows else []
+
+            # If no ids found, try fallbacks for better UX
+            if not id_list:
+                # If searching by name returned nothing, fall back to ingredient and cuisine/tag searches
+                if search_type == 'name':
+                    print(f"[SEARCH] No name matches for '{query}', falling back to ingredient and cuisine searches")
+                    fts = _build_fts_query(query_words)
+                    alt_ids = set()
+
+                    # ingredient fallback
+                    if self._supports_fulltext_on('ingredients'):
+                        rows = self.execute_query(
+                            "SELECT DISTINCT ri.recipe_id as id FROM ingredients i JOIN recipe_ingredients ri ON i.id=ri.ingredient_id WHERE MATCH(i.name) AGAINST(%s IN BOOLEAN MODE) LIMIT %s",
+                            (fts, limit),
+                            fetch=True
+                        )
+                        alt_ids.update(r['id'] for r in rows or [])
+                    else:
+                        like_where = ' OR '.join(['i.name LIKE %s'] * len(query_words))
+                        params = tuple([f'%{w}%' for w in query_words] + [limit])
+                        rows = self.execute_query(
+                            f"SELECT DISTINCT ri.recipe_id as id FROM ingredients i JOIN recipe_ingredients ri ON i.id=ri.ingredient_id WHERE ({like_where}) LIMIT %s",
+                            params,
+                            fetch=True
+                        )
+                        alt_ids.update(r['id'] for r in rows or [])
+
+                    # cuisine/tag fallback
+                    if self._supports_fulltext_on('tags'):
+                        rows = self.execute_query(
+                            "SELECT DISTINCT rt.recipe_id as id FROM tags t JOIN recipe_tags rt ON t.id=rt.tag_id WHERE MATCH(t.name) AGAINST(%s IN BOOLEAN MODE) LIMIT %s",
+                            (fts, limit),
+                            fetch=True
+                        )
+                        alt_ids.update(r['id'] for r in rows or [])
+                    else:
+                        like_where = ' OR '.join(['t.name LIKE %s'] * len(query_words))
+                        params = tuple([f'%{w}%' for w in query_words] + [limit])
+                        rows = self.execute_query(
+                            f"SELECT DISTINCT rt.recipe_id as id FROM tags t JOIN recipe_tags rt ON t.id=rt.tag_id WHERE ({like_where}) LIMIT %s",
+                            params,
+                            fetch=True
+                        )
+                        alt_ids.update(r['id'] for r in rows or [])
+
+                    if not alt_ids:
+                        return []
+
+                    # Limit and convert to list
+                    id_list = list(alt_ids)[:limit]
+                else:
+                    return []
+
+            # Fetch full details for the matched ids
+            results = _fetch_details_for_ids(id_list)
+
+            # Process results
+            for recipe in results:
+                recipe['ingredients'] = recipe['ingredients'].split('|') if recipe['ingredients'] else []
+                recipe['tags'] = recipe['tags'].split('|') if recipe['tags'] else []
+
+            # Cache the results with LRU eviction
+            self.search_cache[cache_key] = results
+            if len(self.search_cache) > self._cache_maxsize:
+                # Pop the least recently used item
+                self.search_cache.popitem(last=False)
+
+            return results
+        except Exception as e:
+            print(f"[ERROR] Search failed for query '{query}': {e}")
+            import traceback
+            traceback.print_exc()
+            return []
 
         try:
             results = self.execute_query(sql, params, fetch=True)

@@ -84,3 +84,63 @@ CREATE TABLE IF NOT EXISTS steps (
 CREATE INDEX idx_recipes_name_ft ON recipes(name(255));
 CREATE INDEX idx_ingredients_name_ft ON ingredients(name);
 CREATE INDEX idx_tags_name_ft ON tags(name);
+
+-- Optional: Add FULLTEXT indexes for faster text search (run once)
+-- The following block creates FULLTEXT indexes only if they do not already exist.
+-- It is safe to source this file in MySQL client. If your MySQL user lacks
+-- permission to create procedures, run the ALTER TABLE statements manually.
+DELIMITER $$
+CREATE PROCEDURE add_fulltext_indexes()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'recipes' AND INDEX_NAME = 'ft_recipes'
+    ) THEN
+        ALTER TABLE recipes ADD FULLTEXT ft_recipes (name, description);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ingredients' AND INDEX_NAME = 'ft_ingredients_name'
+    ) THEN
+        ALTER TABLE ingredients ADD FULLTEXT ft_ingredients_name (name);
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tags' AND INDEX_NAME = 'ft_tags_name'
+    ) THEN
+        ALTER TABLE tags ADD FULLTEXT ft_tags_name (name);
+    END IF;
+END$$
+DELIMITER ;
+
+CALL add_fulltext_indexes();
+DROP PROCEDURE IF EXISTS add_fulltext_indexes;
+
+-- Add a denormalized search_text column and FULLTEXT index for combined searches
+DELIMITER $$
+CREATE PROCEDURE add_search_text_column_and_index()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'recipes' AND COLUMN_NAME = 'search_text'
+    ) THEN
+        ALTER TABLE recipes ADD COLUMN search_text TEXT;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM INFORMATION_SCHEMA.STATISTICS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'recipes' AND INDEX_NAME = 'ft_recipes_search'
+    ) THEN
+        ALTER TABLE recipes ADD FULLTEXT ft_recipes_search (search_text);
+    END IF;
+END$$
+DELIMITER ;
+
+CALL add_search_text_column_and_index();
+DROP PROCEDURE IF EXISTS add_search_text_column_and_index;
+
+-- NOTE: After running this, run `python backend/backfill_search_text.py` to populate
+-- `search_text` for existing recipes. For very large datasets, run the backfill
+-- in batches or use a maintenance window.
