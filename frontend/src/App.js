@@ -24,6 +24,9 @@ function App() {
             </Routes>
           </Suspense>
         </main>
+        <footer className="app-footer">
+          <p>© 2025 SanaAka. All rights reserved.</p>
+        </footer>
       </div>
     </Router>
   );

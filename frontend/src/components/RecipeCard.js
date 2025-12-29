@@ -10,12 +10,24 @@ function RecipeCard({ recipe, onToggleFavorite, isFavorite }) {
     onToggleFavorite(recipe.id);
   };
 
+  const imageUrl = recipe.image_url || recipe.image || recipe.imageUrl;
+  const [imageError, setImageError] = React.useState(false);
+
   return (
     <Link to={`/recipe/${recipe.id}`} className="recipe-card">
       <div className="recipe-card-header">
-        <div className="recipe-image-placeholder">
-          <FaFire className="recipe-icon" />
-        </div>
+        {imageUrl && !imageError ? (
+          <img 
+            src={imageUrl} 
+            alt={recipe.name}
+            className="recipe-image"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <div className="recipe-image-placeholder">
+            <FaFire className="recipe-icon" />
+          </div>
+        )}
         <button 
           className={`favorite-btn ${isFavorite ? 'favorited' : ''}`}
           onClick={handleFavoriteClick}

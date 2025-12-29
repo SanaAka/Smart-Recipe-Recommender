@@ -58,6 +58,26 @@ def get_recommender():
             thread.start()
         return recommender
 
+@app.route('/', methods=['GET'])
+def index():
+    """Root endpoint with API information"""
+    return jsonify({
+        'name': 'Smart Recipe Recommender API',
+        'version': '1.0.0',
+        'status': 'running',
+        'endpoints': {
+            'health': '/api/health',
+            'ml_status': '/api/ml/status',
+            'recommend': '/api/recommend (POST)',
+            'search': '/api/search?query=<term>&type=<name|ingredient|tag>',
+            'recipe': '/api/recipe/<id>',
+            'recipes_batch': '/api/recipes/batch (POST)',
+            'stats': '/api/stats'
+        },
+        'frontend': 'http://localhost',
+        'docs': 'https://github.com/SanaAka/Smart-Recipe-Recommender'
+    })
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -235,6 +255,13 @@ if __name__ == '__main__':
         db.connect()
         print("[OK] Database connected successfully")
         db.disconnect()
+        # Start ML recommender initialization in background so first requests don't wait
+        try:
+            print("[ML] Starting background recommender initialization...")
+            thread = threading.Thread(target=init_recommender_async, daemon=True)
+            thread.start()
+        except Exception as e:
+            print(f"[ML] Failed to start background init: {e}")
     except Exception as e:
         print(f"[ERROR] Database connection failed: {e}")
         traceback.print_exc()

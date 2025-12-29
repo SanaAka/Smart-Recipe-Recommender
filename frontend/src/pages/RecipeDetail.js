@@ -11,6 +11,7 @@ function RecipeDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isFavorite, setIsFavorite] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     loadRecipe();
@@ -94,6 +95,8 @@ function RecipeDetail() {
     );
   }
 
+  const imageUrl = recipe.image_url || recipe.image || recipe.imageUrl;
+
   return (
     <div className="recipe-detail-page">
       <div className="container">
@@ -105,7 +108,16 @@ function RecipeDetail() {
         <div className="recipe-detail-card">
           <div className="recipe-header">
             <div className="recipe-hero">
-              <FaUtensils className="hero-icon" />
+              {imageUrl && !imageError ? (
+                <img 
+                  src={imageUrl}
+                  alt={recipe.name}
+                  className="hero-image"
+                  onError={() => setImageError(true)}
+                />
+              ) : (
+                <FaUtensils className="hero-icon" />
+              )}
             </div>
             
             <div className="recipe-title-section">

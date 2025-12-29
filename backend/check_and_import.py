@@ -23,8 +23,9 @@ def main():
         print(f"  - Total ingredients: {stats['total_ingredients']}")
         print(f"  - Total tags: {stats['total_tags']}")
         
-        if stats['total_recipes'] == 0:
-            print("\n⚠ No recipes found in database!")
+        if stats['total_recipes'] < 100000:
+            current_count = stats['total_recipes']
+            print(f"\n⚠ Database has {current_count} recipes, importing more to reach 100,000...")
             print("Starting data import process...\n")
             
             # Import data
@@ -33,8 +34,9 @@ def main():
                 print(f"✗ Error: {csv_file} not found!")
                 return
             
-            preprocessor = DataPreprocessor(db)
-            preprocessor.load_data_from_csv(csv_file, limit=5000)
+            preprocessor = DataPreprocessor()
+            preprocessor.process_and_load(csv_file, limit=100000)
+            preprocessor.close()
             
             # Get updated stats
             stats = db.get_stats()

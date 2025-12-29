@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: recipe_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: 0965256310Kh@
+      MYSQL_DATABASE: recipe_recommender
+      MYSQL_USER: recipe_user
+      MYSQL_PASSWORD: recipe_pass
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/schema.sql
+    command: --default-authentication-plugin=mysql_native_password --max_allowed_packet=256M
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - recipe_network
+
+  # Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: recipe_backend
+    restart: always
+    environment:
+      FLASK_ENV: production
+      FLASK_APP: app.py
+      PORT: 5000
+      DEBUG: False
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: 0965256310Kh@
+      DB_NAME: recipe_recommender
+      API_PREFIX: /api
+      CORS_ORIGINS: http://localhost:80,http://localhost:3000
+      ML_MODEL_LIMIT: 50000
+      ML_MAX_FEATURES: 15000
+      ML_NGRAM_RANGE_MAX: 3
+    ports:
+      - "5000:5000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./backend/data:/app/data
+    networks:
+      - recipe_network
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: recipe_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - recipe_network
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  recipe_network:
+    driver: bridge

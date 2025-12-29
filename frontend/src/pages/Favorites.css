@@ -10,6 +10,12 @@
   margin-bottom: 40px;
   flex-wrap: wrap;
   gap: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 32px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
 }
 
 .header-content-wrapper {
@@ -21,6 +27,13 @@
 .page-icon {
   font-size: 56px;
   color: white;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
 }
 
 .page-title {
@@ -31,7 +44,7 @@
 }
 
 .page-subtitle {
-  color: rgba(255, 255, 255, 0.9);
+  color: white;
   font-size: 18px;
 }
 
@@ -43,16 +56,29 @@
 
 .empty-state {
   background: white;
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 80px 40px;
   text-align: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(102, 126, 234, 0.1);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.empty-state:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 56px rgba(0, 0, 0, 0.2);
 }
 
 .empty-icon {
   font-size: 80px;
   color: #cbd5e0;
   margin-bottom: 24px;
+  animation: iconPulse 3s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.1); }
 }
 
 .empty-state h2 {

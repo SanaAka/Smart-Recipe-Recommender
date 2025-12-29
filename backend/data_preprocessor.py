@@ -68,6 +68,16 @@ class DataPreprocessor:
         df['tags'] = df.get('NER', '[]')  # Use NER (Named Entity Recognition) as tags
         df['nutrition'] = '[]'  # No nutrition data in this dataset
         
+        # Extract image/source URLs if available
+        df['source_url'] = df.get('link', '')
+        # For now, use Unsplash food images as placeholders based on recipe name
+        # Later this can be replaced with actual recipe images
+        df['image_url'] = df.apply(
+            lambda row: f"https://source.unsplash.com/400x300/?food,{row['name'].replace(' ', ',')}" 
+            if pd.notna(row['name']) else '',
+            axis=1
+        )
+        
         # Clean and process data
         df['name'] = df['name'].fillna('Unknown Recipe')
         
@@ -89,8 +99,8 @@ class DataPreprocessor:
         try:
             # Insert recipe
             recipe_query = """
-                INSERT INTO recipes (name, minutes, description)
-                VALUES (%s, %s, %s)
+                INSERT INTO recipes (name, minutes, description, image_url, source_url)
+                VALUES (%s, %s, %s, %s, %s)
             """
             
             # Handle description - convert float/NaN to None
@@ -100,10 +110,16 @@ class DataPreprocessor:
             else:
                 description = None
             
+            # Handle image and source URLs
+            image_url = row.get('image_url', '')[:1000] if row.get('image_url') else None
+            source_url = row.get('source_url', '')[:1000] if row.get('source_url') else None
+            
             cursor.execute(recipe_query, (
                 row['name'][:500],
                 int(row.get('minutes', 30)),
-                description
+                description,
+                image_url,
+                source_url
             ))
             recipe_id = cursor.lastrowid
 

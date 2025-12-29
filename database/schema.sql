@@ -12,8 +12,12 @@ CREATE TABLE IF NOT EXISTS recipes (
     description TEXT,
     contributor_id INT,
     submitted DATE,
+    image_url VARCHAR(1000),
+    source_url VARCHAR(1000),
+    cuisine VARCHAR(100) DEFAULT NULL,
     INDEX idx_name (name(255)),
-    INDEX idx_minutes (minutes)
+    INDEX idx_minutes (minutes),
+    INDEX idx_cuisine (cuisine)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Ingredients table
