@@ -1,0 +1,214 @@
+.report-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.report-modal {
+  background: var(--card-bg, #fff);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.report-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-color, #eee);
+}
+
+.report-modal-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.15rem;
+  margin: 0;
+  color: var(--text-primary, #333);
+}
+
+.report-modal-header h2 svg {
+  color: #e74c3c;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: var(--text-secondary, #888);
+  padding: 0.25rem;
+  border-radius: 6px;
+  transition: all 0.15s;
+}
+
+.close-btn:hover {
+  color: var(--text-primary, #333);
+  background: var(--hover-bg, #f0f0f0);
+}
+
+.report-modal form {
+  padding: 1.5rem;
+}
+
+.report-section {
+  margin-bottom: 1.25rem;
+}
+
+.report-label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary, #333);
+}
+
+.report-label .optional {
+  font-weight: 400;
+  color: var(--text-secondary, #888);
+  font-size: 0.8rem;
+}
+
+.reason-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.reason-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--border-color, #e0e0e0);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: transparent;
+}
+
+.reason-option:hover {
+  border-color: var(--primary-color, #e74c3c);
+  background: rgba(231, 76, 60, 0.04);
+}
+
+.reason-option.selected {
+  border-color: var(--primary-color, #e74c3c);
+  background: rgba(231, 76, 60, 0.08);
+}
+
+.reason-option input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--primary-color, #e74c3c);
+}
+
+.reason-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.reason-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--text-primary, #333);
+}
+
+.reason-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #888);
+}
+
+.report-textarea {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--border-color, #e0e0e0);
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  resize: vertical;
+  min-height: 80px;
+  background: var(--card-bg, #fff);
+  color: var(--text-primary, #333);
+  transition: border-color 0.15s;
+}
+
+.report-textarea:focus {
+  outline: none;
+  border-color: var(--primary-color, #e74c3c);
+}
+
+.char-count {
+  text-align: right;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #888);
+  margin-top: 0.25rem;
+}
+
+.report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.btn-cancel {
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, #ddd);
+  background: transparent;
+  color: var(--text-primary, #555);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.15s;
+}
+
+.btn-cancel:hover {
+  background: var(--hover-bg, #f5f5f5);
+}
+
+.btn-report {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  border: none;
+  background: #e74c3c;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all 0.15s;
+}
+
+.btn-report:hover:not(:disabled) {
+  background: #c0392b;
+}
+
+.btn-report:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

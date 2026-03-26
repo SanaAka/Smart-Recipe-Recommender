@@ -1,0 +1,118 @@
+/* ===== Star Rating ===== */
+.star-rating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stars-container {
+  display: flex;
+  gap: 2px;
+}
+
+.star {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  transition: all var(--transition-fast);
+  color: var(--text-tertiary);
+  line-height: 1;
+}
+
+.star.filled {
+  color: #fbbf24;
+  text-shadow: 0 0 3px rgba(251, 191, 36, 0.4);
+}
+
+.star.empty {
+  color: var(--border-hover);
+}
+
+.star-rating.interactive .star:hover {
+  transform: scale(1.15);
+}
+
+.star-rating.readonly .star {
+  cursor: default;
+}
+
+.star.submitting {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* Size Variants */
+.star-rating.small .star {
+  font-size: 16px;
+}
+
+.star-rating.medium .star {
+  font-size: 24px;
+}
+
+.star-rating.large .star {
+  font-size: 30px;
+}
+
+.rating-info {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.rating-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.user-rating-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #fbbf24;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.remove-rating-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  font-size: 11px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: all 0.2s ease;
+}
+
+.remove-rating-btn:hover {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  transform: scale(1.1);
+}
+
+.remove-rating-btn:disabled {
+  opacity: 0.4;
+  cursor: wait;
+}
+
+@keyframes star-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+.star:active:not(.submitting) {
+  animation: star-pop 0.25s ease;
+}

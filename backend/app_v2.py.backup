@@ -1,0 +1,898 @@
+"""
+Enhanced Flask Application with Security, Rate Limiting, Logging, and Authentication
+Refactored with best practices for production use
+"""
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from flask_compress import Compress
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_jwt_extended import (
+    JWTManager, jwt_required, get_jwt_identity, create_access_token
+)
+import os
+import threading
+import logging
+import requests
+from pathlib import Path
+from dotenv import load_dotenv
+from datetime import timedelta
+from pydantic import ValidationError
+
+# Import local modules
+from database import Database
+from auth import AuthManager
+from schemas import (
+    RecommendationRequest, SearchRequest, BatchRecipeRequest,
+    UserRegistration, UserLogin, ErrorResponse
+)
+from logger_config import setup_logging
+
+# Import standout features module
+try:
+    from standout_features import standout_bp, init_standout_features
+    STANDOUT_FEATURES_AVAILABLE = True
+except ImportError:
+    logger.warning("Standout features module not available")
+    STANDOUT_FEATURES_AVAILABLE = False
+
+# Load environment variables
+env_path = Path(__file__).parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
+# Setup structured logging
+logger = setup_logging()
+
+# Initialize Flask app
+app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'change-me-in-production')
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'change-me-in-production')
+app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(
+    seconds=int(os.getenv('JWT_ACCESS_TOKEN_EXPIRES', '3600'))
+)
+
+# Initialize extensions
+CORS(app, 
+     origins=os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(','),
+     supports_credentials=True)
+Compress(app)
+jwt = JWTManager(app)
+
+# Rate limiting
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=[os.getenv('RATE_LIMIT_PER_MINUTE', '60') + " per minute"],
+    storage_uri="memory://",
+    enabled=os.getenv('RATE_LIMIT_ENABLED', 'True').lower() == 'true'
+)
+
+# Initialize database and services
+db = Database()
+auth_manager = AuthManager(db)
+recommender = None
+ml_status = {'loading': False, 'ready': False, 'error': None}
+ml_lock = threading.Lock()
+
+# Register standout features blueprint
+if STANDOUT_FEATURES_AVAILABLE:
+    init_standout_features(db, auth_manager, logger, limiter)
+    app.register_blueprint(standout_bp)
+    logger.info("Standout features registered successfully")
+
+
+# Security headers middleware
+@app.after_request
+def add_security_headers(response):
+    """Add security headers to all responses"""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    response.headers['Content-Security-Policy'] = "default-src 'self'"
+    return response
+
+
+# Error handlers
+@app.errorhandler(ValidationError)
+def handle_validation_error(error):
+    """Handle Pydantic validation errors"""
+    logger.warning(f"Validation error: {error}")
+    return jsonify({
+        'error': 'Validation error',
+        'code': 'VALIDATION_ERROR',
+        'details': error.errors()
+    }), 400
+
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    """Handle rate limit exceeded"""
+    logger.warning(f"Rate limit exceeded: {get_remote_address()}")
+    return jsonify({
+        'error': 'Rate limit exceeded',
+        'code': 'RATE_LIMIT_EXCEEDED',
+        'details': str(e)
+    }), 429
+
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Handle internal server errors"""
+    logger.error(f"Internal server error: {error}", exc_info=True)
+    return jsonify({
+        'error': 'Internal server error',
+        'code': 'INTERNAL_ERROR'
+    }), 500
+
+
+# ML Model initialization
+def init_recommender_async():
+    """Initialize ML recommender in background thread"""
+    global recommender, ml_status
+    try:
+        with ml_lock:
+            if recommender is None and not ml_status['loading']:
+                ml_status['loading'] = True
+                logger.info("Initializing ML recommender in background...")
+        
+        from ml_model import RecipeRecommender
+        temp_recommender = RecipeRecommender(db)
+        
+        with ml_lock:
+            recommender = temp_recommender
+            ml_status['loading'] = False
+            ml_status['ready'] = True
+            logger.info("ML recommender ready!")
+    except Exception as e:
+        with ml_lock:
+            ml_status['loading'] = False
+            ml_status['error'] = str(e)
+            logger.error(f"Failed to initialize ML recommender: {e}", exc_info=True)
+
+
+def get_recommender():
+    """Get ML recommender, starting initialization if needed"""
+    global recommender
+    with ml_lock:
+        if recommender is None and not ml_status['loading']:
+            thread = threading.Thread(target=init_recommender_async, daemon=True)
+            thread.start()
+        return recommender
+
+
+# Health and info endpoints
+@app.route('/', methods=['GET'])
+def index():
+    """Root endpoint with API information"""
+    return jsonify({
+        'name': 'Smart Recipe Recommender API',
+        'version': '2.0.0',
+        'status': 'running',
+        'endpoints': {
+            'health': '/api/health',
+            'auth': {
+                'register': '/api/auth/register (POST)',
+                'login': '/api/auth/login (POST)',
+                'profile': '/api/auth/profile (GET - requires auth)'
+            },
+            'recipes': {
+                'recommend': '/api/recommend (POST)',
+                'search': '/api/search (GET)',
+                'detail': '/api/recipe/<id> (GET)',
+                'batch': '/api/recipes/batch (POST)'
+            },
+            'favorites': {
+                'add': '/api/favorites/<recipe_id> (POST - requires auth)',
+                'remove': '/api/favorites/<recipe_id> (DELETE - requires auth)',
+                'list': '/api/favorites (GET - requires auth)'
+            }
+        }
+    })
+
+
+@app.route('/api/health', methods=['GET'])
+def health_check():
+    """Health check endpoint"""
+    return jsonify({
+        'status': 'healthy',
+        'ml_ready': ml_status['ready'],
+        'ml_loading': ml_status['loading'],
+        'database': 'connected'
+    })
+
+
+# Authentication endpoints
+@app.route('/api/auth/register', methods=['POST'])
+@limiter.limit("5 per hour")
+def register():
+    """Register a new user"""
+    try:
+        data = UserRegistration(**request.json)
+        result = auth_manager.register_user(
+            username=data.username,
+            email=data.email,
+            password=data.password
+        )
+        
+        # Generate tokens
+        tokens = auth_manager.generate_tokens(result['user_id'], result['username'])
+        
+        logger.info(f"New user registered: {data.username}")
+        return jsonify({
+            'message': 'User registered successfully',
+            'user': {
+                'id': result['user_id'],
+                'username': result['username'],
+                'email': result['email']
+            },
+            **tokens
+        }), 201
+        
+    except ValueError as e:
+        logger.warning(f"Registration failed: {e}")
+        return jsonify({'error': str(e), 'code': 'REGISTRATION_FAILED'}), 400
+    except Exception as e:
+        logger.error(f"Registration error: {e}", exc_info=True)
+        return jsonify({'error': 'Registration failed', 'code': 'INTERNAL_ERROR'}), 500
+
+
+@app.route('/api/auth/login', methods=['POST'])
+@limiter.limit("10 per minute")
+def login():
+    """Authenticate user and return JWT tokens"""
+    try:
+        data = UserLogin(**request.json)
+        user = auth_manager.authenticate_user(data.username, data.password)
+        
+        if not user:
+            logger.warning(f"Failed login attempt for: {data.username}")
+            return jsonify({
+                'error': 'Invalid credentials',
+                'code': 'INVALID_CREDENTIALS'
+            }), 401
+        
+        tokens = auth_manager.generate_tokens(user['id'], user['username'])
+        
+        logger.info(f"User logged in: {data.username}")
+        return jsonify({
+            'message': 'Login successful',
+            'user': {
+                'id': user['id'],
+                'username': user['username'],
+                'email': user['email']
+            },
+            **tokens
+        })
+        
+    except Exception as e:
+        logger.error(f"Login error: {e}", exc_info=True)
+        return jsonify({'error': 'Login failed', 'code': 'INTERNAL_ERROR'}), 500
+
+
+@app.route('/api/auth/profile', methods=['GET'])
+@jwt_required()
+def get_profile():
+    """Get current user profile"""
+    try:
+        username = get_jwt_identity()  # Now returns username string
+        user = auth_manager.get_user_by_username(username)
+        
+        if not user:
+            return jsonify({'error': 'User not found', 'code': 'USER_NOT_FOUND'}), 404
+        
+        return jsonify({'user': user})
+        
+    except Exception as e:
+        logger.error(f"Profile fetch error: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to fetch profile', 'code': 'INTERNAL_ERROR'}), 500
+
+
+# Recipe endpoints
+@app.route('/api/recommend', methods=['POST'])
+@limiter.limit("30 per minute")
+def get_recommendations():
+    """Get recipe recommendations based on user input"""
+    try:
+        data = RecommendationRequest(**request.json)
+        
+        rec = get_recommender()
+        if rec is None:
+            return jsonify({
+                'loading': True,
+                'message': 'AI recommendation engine is loading...',
+                'recommendations': []
+            }), 202
+        
+        recommendations = rec.recommend(
+            ingredients=data.ingredients,
+            dietary_preference=data.dietary_preference or '',
+            cuisine_type=data.cuisine_type or '',
+            limit=data.limit
+        )
+        
+        logger.info(f"Recommendations generated: {len(recommendations)} results")
+        return jsonify({'recommendations': recommendations, 'loading': False})
+        
+    except ValidationError as e:
+        raise
+    except Exception as e:
+        logger.error(f"Recommendation error: {e}", exc_info=True)
+        return jsonify({'error': 'Recommendation failed', 'code': 'INTERNAL_ERROR'}), 500
+
+
+@app.route('/api/search', methods=['GET'])
+@limiter.limit("60 per minute")
+def search_recipes():
+    """Search recipes with filters"""
+    try:
+        # Build request from query params
+        data = SearchRequest(
+            query=request.args.get('query', ''),
+            search_type=request.args.get('type', 'name'),
+            limit=int(request.args.get('limit', 50)),
+            max_time=int(request.args['max_time']) if 'max_time' in request.args else None,
+            max_calories=int(request.args['max_calories']) if 'max_calories' in request.args else None,
+            min_ingredients=int(request.args['min_ingredients']) if 'min_ingredients' in request.args else None,
+            max_ingredients=int(request.args['max_ingredients']) if 'max_ingredients' in request.args else None
+        )
+        
+        results = db.search_recipes(
+            query=data.query,
+            search_type=data.search_type.value,
+            limit=data.limit,
+            max_time=data.max_time,
+            max_calories=data.max_calories,
+            min_ingredients=data.min_ingredients,
+            max_ingredients=data.max_ingredients
+        )
+        
+        logger.info(f"Search completed: '{data.query}' returned {len(results)} results")
+        return jsonify({'results': results or []})
+        
+    except ValidationError as e:
+        raise
+    except Exception as e:
+        logger.error(f"Search error: {e}", exc_info=True)
+        return jsonify({'error': 'Search failed', 'code': 'INTERNAL_ERROR'}), 500
+
+
+@app.route('/api/recipe/<int:recipe_id>', methods=['GET'])
+@limiter.limit("120 per minute")
+def get_recipe_detail(recipe_id):
+    """Get detailed recipe information"""
+    try:
+        recipe = db.get_recipe_by_id(recipe_id)
+        if not recipe:
+            return jsonify({'error': 'Recipe not found', 'code': 'NOT_FOUND'}), 404
+        
+        return jsonify(recipe)
+        
+    except Exception as e:
+        logger.error(f"Recipe fetch error: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to fetch recipe', 'code': 'INTERNAL_ERROR'}), 500
+
+
+@app.route('/api/recipes/batch', methods=['POST'])
+@limiter.limit("30 per minute")
+def get_recipes_batch():
+    """Get multiple recipes by IDs"""
+    try:
+        data = BatchRecipeRequest(**request.json)
+        recipes = db.get_recipes_by_ids(data.recipe_ids)
+        
+        return jsonify({'recipes': recipes})
+        
+    except ValidationError as e:
+        raise
+    except Exception as e:
+        logger.error(f"Batch fetch error: {e}", exc_info=True)
+        return jsonify({'error': 'Batch fetch failed', 'code': 'INTERNAL_ERROR'}), 500
+
+
+# Favorites endpoints (require authentication)
+@app.route('/api/favorites', methods=['GET'])
+@jwt_required()
+@limiter.limit("60 per minute")
+def get_favorites():
+    """Get user's favorite recipes"""
+    try:
+        username = get_jwt_identity()
+        user = auth_manager.get_user_by_username(username)
+        recipe_ids = auth_manager.get_user_favorites(user['id'])
+        
+        if recipe_ids:
+            recipes = db.get_recipes_by_ids(recipe_ids)
+        else:
+            recipes = []
+        
+        return jsonify({'favorites': recipes})
+        
+    except Exception as e:
+        logger.error(f"Favorites fetch error: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to fetch favorites', 'code': 'INTERNAL_ERROR'}), 500
+
+
+# ============================================================================
+# RATINGS ENDPOINTS
+# ============================================================================
+
+@app.route('/api/recipe/<int:recipe_id>/rating', methods=['POST'])
+@jwt_required()
+@limiter.limit("30 per minute")
+def rate_recipe(recipe_id):
+    """Rate a recipe (1-5 stars)"""
+    try:
+        username = get_jwt_identity()
+        user = auth_manager.get_user_by_username(username)
+        
+        if not user:
+            return jsonify({'error': 'User not found', 'code': 'USER_NOT_FOUND'}), 404
+        
+        data = request.get_json()
+        rating = data.get('rating')
+        
+        if not rating or not isinstance(rating, (int, float)) or rating < 1 or rating > 5:
+            return jsonify({'error': 'Rating must be between 1 and 5', 'code': 'INVALID_RATING'}), 400
+        
+        # Check if recipe exists
+        recipe = db.get_recipe_by_id(recipe_id)
+        if not recipe:
+            return jsonify({'error': 'Recipe not found', 'code': 'NOT_FOUND'}), 404
+        
+        # Insert or update rating
+        query = """
+            INSERT INTO recipe_ratings (recipe_id, user_id, rating)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE rating = %s, updated_at = CURRENT_TIMESTAMP
+        """
+        db.execute_query(query, (recipe_id, user['id'], rating, rating))
+        
+        # Get updated average rating
+        avg_query = """
+            SELECT AVG(rating) as avg_rating, COUNT(*) as rating_count
+            FROM recipe_ratings
+            WHERE recipe_id = %s
+        """
+        stats = db.execute_query(avg_query, (recipe_id,), fetch=True)[0]
+        
+        logger.info(f"User {username} rated recipe {recipe_id}: {rating} stars")
+        return jsonify({
+            'success': True,
+            'rating': rating,
+            'avg_rating': float(stats['avg_rating']) if stats['avg_rating'] else 0,
+            'rating_count': stats['rating_count']
+        })
+        
+    except Exception as e:
+        logger.error(f"Rating error: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to rate recipe', 'code': 'INTERNAL_ERROR'}), 500
+
+
+@app.route('/api/recipe/<int:recipe_id>/rating', methods=['GET'])
+@limiter.limit("120 per minute")
+def get_recipe_rating(recipe_id):
+    """Get recipe rating statistics and user's rating if authenticated"""
+    try:
+        # Get overall rating stats
+        query = """
+            SELECT AVG(rating) as avg_rating, COUNT(*) as rating_count
+            FROM recipe_ratings
+            WHERE recipe_id = %s
+        """
+        stats = db.execute_query(query, (recipe_id,), fetch=True)
+        
+        if not stats:
+            return jsonify({'avg_rating': 0, 'rating_count': 0, 'user_rating': None})
+        
+        result = {
+            'avg_rating': float(stats[0]['avg_rating']) if stats[0]['avg_rating'] else 0,
+            'rating_count': stats[0]['rating_count'],
+            'user_rating': None
+        }
+        
+        # If user is authenticated, get their rating
+        try:
+            from flask_jwt_extended import verify_jwt_in_request, get_jwt_identity
+            verify_jwt_in_request(optional=True)
+            username = get_jwt_identity()
+            
+            if username:
+                user = auth_manager.get_user_by_username(username)
+                if user:
+                    user_query = """
+                        SELECT rating FROM recipe_ratings
+                        WHERE recipe_id = %s AND user_id = %s
+                    """
+                    user_rating = db.execute_query(user_query, (recipe_id, user['id']), fetch=True)
+                    if user_rating:
+                        result['user_rating'] = user_rating[0]['rating']
+        except:
+            pass  # JWT not present or invalid, continue without user rating
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Get rating error: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to fetch rating', 'code': 'INTERNAL_ERROR'}), 500
+
+
+# ============================================================================
+# COMMENTS ENDPOINTS
+# ============================================================================
+
+@app.route('/api/recipe/<int:recipe_id>/comments', methods=['GET'])
+@limiter.limit("120 per minute")
+def get_recipe_comments(recipe_id):
+    """Get comments for a recipe with pagination"""
+    try:
+        page = int(request.args.get('page', 1))
+        limit = min(int(request.args.get('limit', 20)), 50)
+        offset = (page - 1) * limit
+        
+        # Get comments with user info
+        query = """
+            SELECT 
+                c.id, c.comment, c.created_at, c.updated_at,
+                u.username, u.id as user_id
+            FROM recipe_comments c
+            JOIN users u ON c.user_id = u.id
+            WHERE c.recipe_id = %s
+            ORDER BY c.created_at DESC
+            LIMIT %s OFFSET %s
+        """
+        comments = db.execute_query(query, (recipe_id, limit, offset), fetch=True)
+        
+        # Get total count
+        count_query = "SELECT COUNT(*) as total FROM recipe_comments WHERE recipe_id = %s"
+        total = db.execute_query(count_query, (recipe_id,), fetch=True)[0]['total']
+        
+        return jsonify({
+            'comments': comments or [],
+            'total': total,
+            'page': page,
+            'limit': limit,
+            'has_more': (page * limit) < total
+        })
+        
+    except Exception as e:
+        logger.error(f"Get comments error: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to fetch comments', 'code': 'INTERNAL_ERROR'}), 500
+
+
+@app.route('/api/recipe/<int:recipe_id>/comments', methods=['POST'])
+@jwt_required()
+@limiter.limit("10 per minute")
+def add_recipe_comment(recipe_id):
+    """Add a comment to a recipe"""
+    try:
+        username = get_jwt_identity()
+        user = auth_manager.get_user_by_username(username)
+        
+        if not user:
+            return jsonify({'error': 'User not found', 'code': 'USER_NOT_FOUND'}), 404
+        
+        data = request.get_json()
+        comment = data.get('comment', '').strip()
+        
+        if not comment or len(comment) < 3:
+            return jsonify({'error': 'Comment must be at least 3 characters', 'code': 'INVALID_COMMENT'}), 400
+        
+        if len(comment) > 1000:
+            return jsonify({'error': 'Comment must be less than 1000 characters', 'code': 'COMMENT_TOO_LONG'}), 400
+        
+        # Check if recipe exists
+        recipe = db.get_recipe_by_id(recipe_id)
+        if not recipe:
+            return jsonify({'error': 'Recipe not found', 'code': 'NOT_FOUND'}), 404
+        
+        # Insert comment
+        query = """
+            INSERT INTO recipe_comments (recipe_id, user_id, comment)
+            VALUES (%s, %s, %s)
+        """
+        db.execute_query(query, (recipe_id, user['id'], comment))
+        
+        # Get the newly created comment
+        get_query = """
+            SELECT 
+                c.id, c.comment, c.created_at, c.updated_at,
+                u.username, u.id as user_id
+            FROM recipe_comments c
+            JOIN users u ON c.user_id = u.id
+            WHERE c.recipe_id = %s AND c.user_id = %s
+            ORDER BY c.created_at DESC
+            LIMIT 1
+        """
+        new_comment = db.execute_query(get_query, (recipe_id, user['id']), fetch=True)[0]
+        
+        logger.info(f"User {username} commented on recipe {recipe_id}")
+        return jsonify({'success': True, 'comment': new_comment}), 201
+        
+    except Exception as e:
+        logger.error(f"Add comment error: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to add comment', 'code': 'INTERNAL_ERROR'}), 500
+
+
+@app.route('/api/recipe/<int:recipe_id>/comments/<int:comment_id>', methods=['DELETE'])
+@jwt_required()
+@limiter.limit("30 per minute")
+def delete_recipe_comment(recipe_id, comment_id):
+    """Delete a comment (only by comment author)"""
+    try:
+        username = get_jwt_identity()
+        user = auth_manager.get_user_by_username(username)
+        
+        if not user:
+            return jsonify({'error': 'User not found', 'code': 'USER_NOT_FOUND'}), 404
+        
+        # Check if comment exists and belongs to user
+        check_query = """
+            SELECT user_id FROM recipe_comments
+            WHERE id = %s AND recipe_id = %s
+        """
+        comment = db.execute_query(check_query, (comment_id, recipe_id), fetch=True)
+        
+        if not comment:
+            return jsonify({'error': 'Comment not found', 'code': 'NOT_FOUND'}), 404
+        
+        if comment[0]['user_id'] != user['id']:
+            return jsonify({'error': 'Unauthorized to delete this comment', 'code': 'UNAUTHORIZED'}), 403
+        
+        # Delete comment
+        delete_query = "DELETE FROM recipe_comments WHERE id = %s"
+        db.execute_query(delete_query, (comment_id,))
+        
+        logger.info(f"User {username} deleted comment {comment_id}")
+        return jsonify({'success': True, 'message': 'Comment deleted'})
+        
+    except Exception as e:
+        logger.error(f"Delete comment error: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to delete comment', 'code': 'INTERNAL_ERROR'}), 500
+
+
+# ============================================================================
+# UNSPLASH IMAGE SEARCH
+# ============================================================================
+
+@app.route('/api/recipe/<int:recipe_id>/image/search', methods=['GET'])
+@limiter.limit("30 per minute")
+def search_recipe_image(recipe_id):
+    """Search Unsplash for recipe images"""
+    try:
+        recipe = db.get_recipe_by_id(recipe_id)
+        if not recipe:
+            return jsonify({'error': 'Recipe not found', 'code': 'NOT_FOUND'}), 404
+        
+        unsplash_key = os.getenv('UNSPLASH_ACCESS_KEY')
+        if not unsplash_key or unsplash_key == 'your-access-key-here':
+            # Fallback to default placeholder
+            return jsonify({
+                'images': [],
+                'message': 'Unsplash API key not configured'
+            })
+        
+        # Search query based on recipe name
+        query = recipe['name']
+        url = 'https://api.unsplash.com/search/photos'
+        params = {
+            'query': f"{query} food",
+            'per_page': 6,
+            'orientation': 'landscape'
+        }
+        headers = {'Authorization': f'Client-ID {unsplash_key}'}
+        
+        response = requests.get(url, params=params, headers=headers, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            images = [{
+                'id': img['id'],
+                'url': img['urls']['regular'],
+                'thumb': img['urls']['thumb'],
+                'photographer': img['user']['name'],
+                'photographer_url': img['user']['links']['html']
+            } for img in data.get('results', [])]
+            
+            return jsonify({'images': images})
+        else:
+            return jsonify({'images': [], 'error': 'Failed to fetch images'})
+        
+    except requests.RequestException as e:
+        logger.error(f"Unsplash API error: {e}")
+        return jsonify({'images': [], 'error': 'Image search unavailable'}), 503
+    except Exception as e:
+        logger.error(f"Image search error: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to search images', 'code': 'INTERNAL_ERROR'}), 500
+
+
+@app.route('/api/recipe/<int:recipe_id>/image', methods=['POST'])
+@jwt_required()
+@limiter.limit("20 per minute")
+def update_recipe_image(recipe_id):
+    """Update recipe image URL"""
+    try:
+        username = get_jwt_identity()
+        
+        data = request.get_json()
+        image_url = data.get('image_url', '').strip()
+        
+        if not image_url:
+            return jsonify({'error': 'Image URL is required', 'code': 'INVALID_INPUT'}), 400
+        
+        # Check if recipe exists
+        recipe = db.get_recipe_by_id(recipe_id)
+        if not recipe:
+            return jsonify({'error': 'Recipe not found', 'code': 'NOT_FOUND'}), 404
+        
+        # Update image URL
+        query = "UPDATE recipes SET image_url = %s WHERE id = %s"
+        db.execute_query(query, (image_url, recipe_id))
+        
+        logger.info(f"User {username} updated image for recipe {recipe_id}")
+        return jsonify({'success': True, 'image_url': image_url})
+        
+    except Exception as e:
+        logger.error(f"Update image error: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to update image', 'code': 'INTERNAL_ERROR'}), 500
+
+
+# ============================================================================
+# PAGINATION SUPPORT FOR BROWSING
+# ============================================================================
+
+@app.route('/api/recipes/browse', methods=['GET'])
+@limiter.limit("60 per minute")
+def browse_recipes():
+    """Browse recipes with pagination, sorting, and filters"""
+    try:
+        page = int(request.args.get('page', 1))
+        limit = min(int(request.args.get('limit', 20)), 100)
+        offset = (page - 1) * limit
+        
+        sort_by = request.args.get('sort', 'popular')  # popular, recent, rating, name
+        max_time = request.args.get('max_time')
+        max_calories = request.args.get('max_calories')
+        
+        # Build WHERE clause
+        where_conditions = []
+        params = []
+        
+        if max_time:
+            where_conditions.append('r.minutes <= %s')
+            params.append(int(max_time))
+        
+        if max_calories:
+            where_conditions.append('n.calories <= %s')
+            params.append(int(max_calories))
+        
+        where_clause = ' AND ' + ' AND '.join(where_conditions) if where_conditions else ''
+        
+        # Build ORDER BY clause
+        order_map = {
+            'popular': 'COALESCE(s.favorite_count, 0) DESC',
+            'recent': 'r.submitted DESC',
+            'rating': 'COALESCE(s.avg_rating, 0) DESC',
+            'name': 'r.name ASC'
+        }
+        order_by = order_map.get(sort_by, order_map['popular'])
+        
+        # Get recipes with stats
+        query = f"""
+            SELECT 
+                r.id, r.name, r.minutes, r.image_url,
+                GROUP_CONCAT(DISTINCT i.name ORDER BY i.name SEPARATOR '|') as ingredients,
+                GROUP_CONCAT(DISTINCT t.name ORDER BY t.name SEPARATOR '|') as tags,
+                n.calories,
+                COALESCE(s.avg_rating, 0) as avg_rating,
+                COALESCE(s.rating_count, 0) as rating_count
+            FROM recipes r
+            LEFT JOIN nutrition n ON r.id = n.recipe_id
+            LEFT JOIN recipe_ingredients ri ON r.id = ri.recipe_id
+            LEFT JOIN ingredients i ON ri.ingredient_id = i.id
+            LEFT JOIN recipe_tags rt ON r.id = rt.recipe_id
+            LEFT JOIN tags t ON rt.tag_id = t.id
+            LEFT JOIN recipe_stats_extended s ON r.id = s.recipe_id
+            WHERE 1=1{where_clause}
+            GROUP BY r.id, r.name, r.minutes, r.image_url, n.calories, s.avg_rating, s.rating_count
+            ORDER BY {order_by}
+            LIMIT %s OFFSET %s
+        """
+        
+        params.extend([limit, offset])
+        recipes = db.execute_query(query, tuple(params), fetch=True)
+        
+        # Process results
+        for recipe in recipes or []:
+            recipe['ingredients'] = recipe['ingredients'].split('|') if recipe.get('ingredients') else []
+            recipe['tags'] = recipe['tags'].split('|') if recipe.get('tags') else []
+        
+        # Get total count
+        count_query = f"""
+            SELECT COUNT(DISTINCT r.id) as total
+            FROM recipes r
+            LEFT JOIN nutrition n ON r.id = n.recipe_id
+            WHERE 1=1{where_clause}
+        """
+        total = db.execute_query(count_query, tuple(params[:-2]) if where_conditions else (), fetch=True)[0]['total']
+        
+        return jsonify({
+            'recipes': recipes or [],
+            'total': total,
+            'page': page,
+            'limit': limit,
+            'has_more': (page * limit) < total
+        })
+        
+    except Exception as e:
+        logger.error(f"Browse recipes error: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to browse recipes', 'code': 'INTERNAL_ERROR'}), 500
+
+
+
+@app.route('/api/favorites/<int:recipe_id>', methods=['POST'])
+@jwt_required()
+@limiter.limit("30 per minute")
+def add_favorite(recipe_id):
+    """Add recipe to favorites"""
+    try:
+        username = get_jwt_identity()
+        user = auth_manager.get_user_by_username(username)
+        success = auth_manager.save_user_favorite(user['id'], recipe_id)
+        
+        if success:
+            return jsonify({'message': 'Added to favorites'})
+        else:
+            return jsonify({'error': 'Failed to add favorite', 'code': 'OPERATION_FAILED'}), 500
+            
+    except Exception as e:
+        logger.error(f"Add favorite error: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to add favorite', 'code': 'INTERNAL_ERROR'}), 500
+
+
+@app.route('/api/favorites/<int:recipe_id>', methods=['DELETE'])
+@jwt_required()
+@limiter.limit("30 per minute")
+def remove_favorite(recipe_id):
+    """Remove recipe from favorites"""
+    try:
+        username = get_jwt_identity()
+        user = auth_manager.get_user_by_username(username)
+        success = auth_manager.remove_user_favorite(user['id'], recipe_id)
+        
+        if success:
+            return jsonify({'message': 'Removed from favorites'})
+        else:
+            return jsonify({'error': 'Failed to remove favorite', 'code': 'OPERATION_FAILED'}), 500
+            
+    except Exception as e:
+        logger.error(f"Remove favorite error: {e}", exc_info=True)
+        return jsonify({'error': 'Failed to remove favorite', 'code': 'INTERNAL_ERROR'}), 500
+
+
+if __name__ == '__main__':
+    port = int(os.getenv('PORT', 5000))
+    debug = os.getenv('FLASK_ENV', 'development') == 'development'
+    
+    logger.info(f"Starting Smart Recipe Recommender API v2.0 on port {port}")
+    
+    # Test database connection
+    try:
+        db.connect()
+        logger.info("Database connected successfully")
+        db.disconnect()
+        
+        # Start ML initialization
+        thread = threading.Thread(target=init_recommender_async, daemon=True)
+        thread.start()
+    except Exception as e:
+        logger.critical(f"Database connection failed: {e}", exc_info=True)
+        import sys
+        sys.exit(1)
+    
+    try:
+        app.run(host='0.0.0.0', port=port, debug=debug, use_reloader=False, threaded=True)
+    except Exception as e:
+        logger.critical(f"Failed to start server: {e}", exc_info=True)
+    finally:
+        logger.info("Server stopped")

@@ -1,0 +1,188 @@
+/* ── Account Settings Page ── */
+
+/* Entrance animation */
+@keyframes settingsFadeUp {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.settings-page {
+  padding: 2rem 1rem;
+  max-width: 680px;
+  margin: 0 auto;
+  animation: settingsFadeUp 0.45s ease-out;
+}
+
+.settings-page .back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  color: var(--text-secondary, #666);
+  cursor: pointer;
+  font-size: 0.95rem;
+  margin-bottom: 1.2rem;
+  padding: 0;
+  transition: color 0.2s, transform 0.2s;
+}
+.settings-page .back-btn:hover {
+  color: var(--primary, #ff6b35);
+  transform: translateX(-3px);
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.settings-header h1 {
+  font-size: 1.6rem;
+  margin: 0;
+}
+.settings-subtitle {
+  margin: 0;
+  color: var(--text-secondary, #888);
+  font-size: 0.9rem;
+}
+
+/* ── Card ── */
+.settings-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  animation: settingsFadeUp 0.5s ease-out both;
+}
+.settings-card:nth-child(2) { animation-delay: 0.06s; }
+.settings-card:nth-child(3) { animation-delay: 0.12s; }
+.settings-card:nth-child(4) { animation-delay: 0.18s; }
+.settings-card:nth-child(5) { animation-delay: 0.24s; }
+
+.settings-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+  border-color: var(--primary, #ff6b35);
+}
+
+.settings-card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+  margin: 0 0 1rem;
+  transition: color 0.2s;
+}
+.settings-card:hover .settings-card-title { color: var(--primary, #ff6b35); }
+.settings-card.danger-zone:hover .settings-card-title { color: #e74c3c; }
+
+/* ── Form Elements ── */
+.settings-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary, #555);
+  margin-bottom: 0.35rem;
+  margin-top: 0.8rem;
+}
+.settings-label:first-of-type { margin-top: 0; }
+
+.settings-input,
+.settings-textarea {
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border-color, #ccc);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  background: var(--input-bg, #fff);
+  color: var(--text-primary, #333);
+  transition: border-color 0.25s, box-shadow 0.25s;
+  box-sizing: border-box;
+}
+.settings-input:focus,
+.settings-textarea:focus {
+  outline: none;
+  border-color: var(--primary, #ff6b35);
+  box-shadow: 0 0 0 3px rgba(255,107,53,0.12);
+}
+.settings-textarea { resize: vertical; min-height: 70px; }
+
+.char-count {
+  text-align: right;
+  font-size: 0.78rem;
+  color: var(--text-secondary, #999);
+  margin-top: 0.2rem;
+  margin-bottom: 0.5rem;
+}
+
+/* ── Buttons ── */
+.settings-card .btn {
+  margin-top: 1rem;
+  padding: 0.55rem 1.4rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: none;
+  font-weight: 600;
+  transition: background 0.25s, opacity 0.25s, transform 0.2s, box-shadow 0.25s;
+}
+.settings-card .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.settings-card .btn-primary {
+  background: var(--primary, #ff6b35);
+  color: #fff;
+}
+.settings-card .btn-primary:hover:not(:disabled) {
+  background: #e55a24;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255,107,53,0.3);
+}
+.settings-card .btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* ── Danger Zone ── */
+.danger-zone {
+  border-color: #e74c3c44;
+  background: var(--card-bg, #fff);
+}
+.danger-zone:hover {
+  border-color: #e74c3c !important;
+  box-shadow: 0 8px 24px rgba(231,76,60,0.12) !important;
+}
+.danger-title { color: #e74c3c; }
+.danger-desc {
+  font-size: 0.88rem;
+  color: var(--text-secondary, #888);
+  margin: 0 0 0.8rem;
+}
+
+.settings-card .btn-danger {
+  background: #e74c3c;
+  color: #fff;
+}
+.settings-card .btn-danger:hover:not(:disabled) {
+  background: #c0392b;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(231,76,60,0.3);
+}
+.settings-card .btn-danger:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* ── Responsive ── */
+@media (max-width: 500px) {
+  .settings-header {
+    flex-direction: column;
+    text-align: center;
+  }
+  .settings-card { padding: 1.2rem; }
+}

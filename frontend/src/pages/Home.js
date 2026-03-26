@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { FaSearch, FaUtensils } from 'react-icons/fa';
-import axios from 'axios';
+import api from '../utils/axios';
 import RecipeCard from '../components/RecipeCard';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import RecipeOfTheDay from '../components/RecipeOfTheDay';
+import PersonalPicks from '../components/PersonalPicks';
+import { useFavorites } from '../context/FavoritesContext';
 import './Home.css';
 
 function Home() {
@@ -12,16 +15,7 @@ function Home() {
   const [recommendations, setRecommendations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [favorites, setFavorites] = useState([]);
-
-  useEffect(() => {
-    loadFavorites();
-  }, []);
-
-  const loadFavorites = () => {
-    const savedFavorites = JSON.parse(localStorage.getItem('favorites') || '[]');
-    setFavorites(savedFavorites);
-  };
+  const { favorites, isFavorite, toggleFavorite } = useFavorites();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -30,7 +24,7 @@ function Home() {
     setRecommendations([]);
 
     try {
-      const response = await axios.post('/api/recommend', {
+      const response = await api.post('/api/recommend', {
         ingredients: ingredients.split(',').map(i => i.trim()).filter(i => i),
         dietary_preference: dietaryPreference,
         cuisine_type: cuisineType
@@ -60,19 +54,7 @@ function Home() {
     }
   };
 
-  const toggleFavorite = (recipeId) => {
-    const savedFavorites = JSON.parse(localStorage.getItem('favorites') || '[]');
-    let newFavorites;
 
-    if (savedFavorites.includes(recipeId)) {
-      newFavorites = savedFavorites.filter(id => id !== recipeId);
-    } else {
-      newFavorites = [...savedFavorites, recipeId];
-    }
-
-    localStorage.setItem('favorites', JSON.stringify(newFavorites));
-    setFavorites(newFavorites);
-  };
 
   return (
     <div className="home-page">
@@ -159,6 +141,14 @@ function Home() {
 
       <div className="results-section">
         <div className="container">
+          {/* Recipe of the Day + Personal Picks — Show when no recommendations */}
+          {recommendations.length === 0 && !loading && !error && (
+            <>
+              <RecipeOfTheDay />
+              <PersonalPicks />
+            </>
+          )}
+
           {error && (
             <div className="error-message">
               {error}
@@ -177,7 +167,7 @@ function Home() {
                   <RecipeCard
                     key={recipe.id}
                     recipe={recipe}
-                    isFavorite={favorites.includes(recipe.id)}
+                    isFavorite={isFavorite(recipe.id)}
                     onToggleFavorite={toggleFavorite}
                   />
                 ))}

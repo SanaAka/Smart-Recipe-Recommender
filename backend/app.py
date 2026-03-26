@@ -10,7 +10,7 @@ import traceback
 
 # Load environment variables from .env file in the same directory as this script
 env_path = Path(__file__).parent / '.env'
-load_dotenv(dotenv_path=env_path)
+load_dotenv(dotenv_path=env_path, override=True)
 print(f"Loaded .env from: {env_path}")
 print(f"DB_PASSWORD loaded: {'Yes' if os.getenv('DB_PASSWORD') else 'No'}")
 

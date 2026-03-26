@@ -1,0 +1,95 @@
+/* ===== Error Boundary ===== */
+.error-boundary {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #064e3b, #059669);
+  padding: 20px;
+}
+
+.error-boundary-content {
+  background: white;
+  border-radius: var(--radius-lg, 20px);
+  padding: 48px;
+  max-width: 520px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+}
+
+.error-icon {
+  font-size: 56px;
+  margin-bottom: 20px;
+}
+
+.error-boundary-content h1 {
+  color: #1c1917;
+  font-size: 26px;
+  font-weight: 800;
+  margin-bottom: 12px;
+  letter-spacing: -0.02em;
+}
+
+.error-boundary .error-message {
+  color: #57534e;
+  font-size: 15px;
+  line-height: 1.6;
+  margin-bottom: 28px;
+  background: none;
+  border: none;
+  padding: 0;
+  text-align: center;
+}
+
+.error-details {
+  text-align: left;
+  margin: 20px 0;
+  padding: 14px;
+  background: #fafafa;
+  border-radius: 10px;
+  border: 1px solid #e4e4e7;
+}
+
+.error-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #059669;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.error-stack {
+  color: #ef4444;
+  font-size: 11px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'JetBrains Mono', monospace;
+  margin: 0;
+}
+
+.error-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .error-boundary-content {
+    padding: 32px 24px;
+  }
+
+  .error-boundary-content h1 {
+    font-size: 22px;
+  }
+
+  .error-actions {
+    flex-direction: column;
+  }
+
+  .error-actions button {
+    width: 100%;
+  }
+}
