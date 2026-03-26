@@ -46,6 +46,7 @@ function AdvancedFilters({ onApplyFilters }) {
                 id="maxTime"
                 name="maxTime"
                 type="number"
+                min="1"
                 placeholder="e.g., 30"
                 value={filters.maxTime}
                 onChange={(e) => setFilters({...filters, maxTime: e.target.value})}
@@ -59,6 +60,7 @@ function AdvancedFilters({ onApplyFilters }) {
                 id="maxCalories"
                 name="maxCalories"
                 type="number"
+                min="1"
                 placeholder="e.g., 500"
                 value={filters.maxCalories}
                 onChange={(e) => setFilters({...filters, maxCalories: e.target.value})}
@@ -72,6 +74,7 @@ function AdvancedFilters({ onApplyFilters }) {
                 id="minIngredients"
                 name="minIngredients"
                 type="number"
+                min="1"
                 placeholder="e.g., 3"
                 value={filters.minIngredients}
                 onChange={(e) => setFilters({...filters, minIngredients: e.target.value})}
@@ -85,6 +88,7 @@ function AdvancedFilters({ onApplyFilters }) {
                 id="maxIngredients"
                 name="maxIngredients"
                 type="number"
+                min="1"
                 placeholder="e.g., 10"
                 value={filters.maxIngredients}
                 onChange={(e) => setFilters({...filters, maxIngredients: e.target.value})}

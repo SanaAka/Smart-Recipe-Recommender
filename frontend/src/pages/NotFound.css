@@ -1,0 +1,89 @@
+/* ===== 404 Not Found Page ===== */
+.not-found-page {
+  min-height: calc(100vh - 72px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.not-found-content {
+  text-align: center;
+  max-width: 480px;
+  animation: notFoundFade 0.6s ease-out;
+}
+
+@keyframes notFoundFade {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.not-found-icon {
+  font-size: 64px;
+  color: var(--warning, #f59e0b);
+  margin-bottom: 16px;
+}
+
+.not-found-code {
+  font-size: 96px;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1;
+  margin: 0;
+}
+
+.not-found-title {
+  font-size: 24px;
+  color: var(--text-primary);
+  margin: 8px 0 16px;
+}
+
+.not-found-message {
+  color: var(--text-secondary);
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 32px;
+}
+
+.not-found-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.not-found-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all var(--transition);
+  cursor: pointer;
+}
+
+.not-found-actions .btn-primary {
+  background: var(--primary);
+  color: white;
+  border: none;
+}
+.not-found-actions .btn-primary:hover {
+  background: var(--primary-dark, #e05500);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.not-found-actions .btn-secondary {
+  background: var(--card-bg);
+  color: var(--text-primary);
+  border: 1.5px solid var(--border-color);
+}
+.not-found-actions .btn-secondary:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}

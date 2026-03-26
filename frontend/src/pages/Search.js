@@ -1,18 +1,22 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { FaSearch } from 'react-icons/fa';
-import axios from 'axios';
+import React, { useState, useRef, useCallback } from 'react';
+import { FaSearch, FaSortAmountDown } from 'react-icons/fa';
+import api from '../utils/axios';
 import RecipeCard from '../components/RecipeCard';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import AdvancedFilters from '../components/AdvancedFilters';
+import { useToast } from '../context/ToastContext';
+import { useFavorites } from '../context/FavoritesContext';
 import './Search.css';
 
 function Search() {
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchType, setSearchType] = useState('name');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [favorites, setFavorites] = useState([]);
+  const { isFavorite, toggleFavorite: ctxToggleFavorite } = useFavorites();
+  const [sortBy, setSortBy] = useState('relevance');
   const [filters, setFilters] = useState({
     maxTime: '',
     maxCalories: '',
@@ -22,16 +26,7 @@ function Search() {
   const abortRef = useRef(null);
   const lastParamsRef = useRef('');
 
-  useEffect(() => {
-    loadFavorites();
-  }, []);
-
-  const loadFavorites = () => {
-    const savedFavorites = JSON.parse(localStorage.getItem('favorites') || '[]');
-    setFavorites(savedFavorites);
-  };
-
-  const handleSearch = async (e) => {
+  const handleSearch = async (e, filterOverride) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!searchQuery.trim()) {
       setError('Please enter a search term');
@@ -42,18 +37,22 @@ function Search() {
     setError('');
     setResults([]);
 
+    // Use passed-in filters if available (avoids stale closure)
+    const activeFilters = filterOverride || filters;
+
     try {
       const params = {
         query: searchQuery,
         type: searchType,
-        limit: 50
+        limit: 50,
+        ...(sortBy !== 'relevance' && { sort: sortBy })
       };
 
-      // Add filters if they have values
-      if (filters.maxTime) params.max_time = filters.maxTime;
-      if (filters.maxCalories) params.max_calories = filters.maxCalories;
-      if (filters.maxIngredients) params.max_ingredients = filters.maxIngredients;
-      if (filters.minIngredients) params.min_ingredients = filters.minIngredients;
+      // Add filters if they have positive values (0 or empty = no filter)
+      if (activeFilters.maxTime && Number(activeFilters.maxTime) >= 1) params.max_time = Number(activeFilters.maxTime);
+      if (activeFilters.maxCalories && Number(activeFilters.maxCalories) >= 1) params.max_calories = Number(activeFilters.maxCalories);
+      if (activeFilters.maxIngredients && Number(activeFilters.maxIngredients) >= 1) params.max_ingredients = Number(activeFilters.maxIngredients);
+      if (activeFilters.minIngredients && Number(activeFilters.minIngredients) >= 1) params.min_ingredients = Number(activeFilters.minIngredients);
 
       // Avoid duplicate identical requests
       const paramsKey = JSON.stringify(params);
@@ -70,7 +69,7 @@ function Search() {
       const controller = new AbortController();
       abortRef.current = controller;
 
-      const response = await axios.get('/api/search', { params, signal: controller.signal });
+      const response = await api.get('/api/search', { params, signal: controller.signal });
 
       setResults(response.data.results || []);
       
@@ -78,7 +77,7 @@ function Search() {
         setError('No recipes found. Try a different search term.');
       }
     } catch (err) {
-      if (axios.isCancel?.(err)) {
+      if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
         // Swallow cancellations
         return;
       }
@@ -90,24 +89,15 @@ function Search() {
   };
 
   const toggleFavorite = useCallback((recipeId) => {
-    const savedFavorites = JSON.parse(localStorage.getItem('favorites') || '[]');
-    let newFavorites;
-
-    if (savedFavorites.includes(recipeId)) {
-      newFavorites = savedFavorites.filter(id => id !== recipeId);
-    } else {
-      newFavorites = [...savedFavorites, recipeId];
-    }
-
-    localStorage.setItem('favorites', JSON.stringify(newFavorites));
-    setFavorites(newFavorites);
-  }, []);
+    ctxToggleFavorite(recipeId);
+  }, [ctxToggleFavorite]);
 
   const handleApplyFilters = (newFilters) => {
     setFilters(newFilters);
     // If there's an active search, re-run it with the new filters
+    // Pass newFilters directly to avoid stale closure reading old state
     if (searchQuery.trim()) {
-      handleSearch({ preventDefault: () => {} });
+      handleSearch({ preventDefault: () => {} }, newFilters);
     }
   };
 
@@ -156,6 +146,25 @@ function Search() {
           </form>
 
           <AdvancedFilters onApplyFilters={handleApplyFilters} />
+
+          {/* Sort Controls */}
+          <div className="sort-controls">
+            <FaSortAmountDown />
+            <label htmlFor="sortBy" className="sr-only">Sort by</label>
+            <select
+              id="sortBy"
+              className="sort-select"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+            >
+              <option value="relevance">Sort: Relevance</option>
+              <option value="popular">Most Popular</option>
+              <option value="recent">Most Recent</option>
+              <option value="rating">Highest Rated</option>
+              <option value="name">Name (A-Z)</option>
+              <option value="time_asc">Quickest First</option>
+            </select>
+          </div>
         </div>
 
         <div className="search-results">
@@ -178,7 +187,7 @@ function Search() {
                   <RecipeCard
                     key={recipe.id}
                     recipe={recipe}
-                    isFavorite={favorites.includes(recipe.id)}
+                    isFavorite={isFavorite(recipe.id)}
                     onToggleFavorite={toggleFavorite}
                   />
                 ))}

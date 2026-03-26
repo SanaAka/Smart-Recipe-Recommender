@@ -1,0 +1,206 @@
+/* ===== Personal Picks Section ===== */
+.personal-picks {
+  max-width: 900px;
+  margin: 0 auto 40px;
+  animation: fadeInUp 0.5s ease 0.1s both;
+}
+
+.personal-picks-header {
+  margin-bottom: 16px;
+}
+
+.personal-picks-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, var(--accent-500), var(--accent-600, #d97706));
+  color: white;
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  font-size: 12px;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+}
+
+.personal-picks-subtitle {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.highlight-tag {
+  color: var(--accent-500);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* Grid of pick cards */
+.personal-picks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+/* Individual pick card */
+.personal-pick-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  color: inherit;
+  transition: all var(--transition);
+  cursor: pointer;
+}
+
+.personal-pick-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--accent-500);
+}
+
+.pick-card-image {
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(135deg, #065f46, #059669);
+}
+
+.pick-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.35s ease;
+}
+
+.pick-card-image img.img-loading {
+  opacity: 0;
+}
+
+.pick-card-image img.img-loaded {
+  opacity: 1;
+}
+
+.pick-card-image .image-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, #065f46 30%, rgba(255,255,255,0.15) 50%, #065f46 70%);
+  background-size: 200% 100%;
+  animation: pick-shimmer 1.4s ease-in-out infinite;
+  z-index: 0;
+}
+
+@keyframes pick-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.pick-card-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #065f46, #059669);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 22px;
+}
+
+.pick-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pick-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pick-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pick-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.pick-meta-item svg {
+  font-size: 10px;
+  color: var(--accent-500);
+}
+
+.pick-card-tags {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.pick-tag {
+  padding: 1px 7px;
+  background: var(--bg-tertiary, rgba(5, 150, 105, 0.08));
+  color: var(--primary);
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.pick-card-arrow {
+  flex-shrink: 0;
+  color: var(--text-tertiary, var(--text-secondary));
+  font-size: 12px;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: all var(--transition);
+}
+
+.personal-pick-card:hover .pick-card-arrow {
+  opacity: 1;
+  transform: translateX(0);
+  color: var(--accent-500);
+}
+
+/* Loading state */
+.personal-picks-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  background: var(--card-bg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.personal-picks-loading p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+@media (max-width: 768px) {
+  .personal-picks-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,354 @@
+/* ===== Light Theme ===== */
+:root[data-theme="light"] {
+  --bg-primary: #fafaf9;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f5f5f4;
+  --bg-elevated: #ffffff;
+  --text-primary: #1c1917;
+  --text-secondary: #57534e;
+  --text-tertiary: #a8a29e;
+  --border-color: #e7e5e4;
+  --border-hover: #d6d3d1;
+  --primary: #059669;
+  --primary-hover: #047857;
+  --primary-light: rgba(5, 150, 105, 0.08);
+  --card-bg: #ffffff;
+  --input-bg: #ffffff;
+  --hero-from: #065f46;
+  --hero-via: #047857;
+  --hero-to: #059669;
+  --overlay-bg: rgba(0, 0, 0, 0.5);
+}
+
+/* ===== Dark Theme ===== */
+:root[data-theme="dark"] {
+  --bg-primary: #0c0a09;
+  --bg-secondary: #1c1917;
+  --bg-tertiary: #292524;
+  --bg-elevated: #1c1917;
+  --text-primary: #fafaf9;
+  --text-secondary: #d6d3d1;
+  --text-tertiary: #78716c;
+  --border-color: #292524;
+  --border-hover: #44403c;
+  --primary: #34d399;
+  --primary-hover: #6ee7b7;
+  --primary-light: rgba(52, 211, 153, 0.1);
+  --card-bg: #1c1917;
+  --input-bg: #292524;
+  --hero-from: #064e3b;
+  --hero-via: #065f46;
+  --hero-to: #047857;
+  --overlay-bg: rgba(0, 0, 0, 0.7);
+}
+
+/* ===== Base Theme Application ===== */
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color var(--transition-slow), color var(--transition-slow);
+}
+
+.App {
+  background: var(--bg-primary);
+}
+
+/* ===== Card Theme ===== */
+.card,
+.recipe-card,
+.search-form-horizontal,
+.search-form,
+.shopping-header,
+.favorites-header,
+.category-section,
+.stat-card,
+.empty-state {
+  background: var(--card-bg);
+  border-color: var(--border-color);
+}
+
+.card:hover,
+.recipe-card:hover {
+  border-color: var(--primary);
+}
+
+/* ===== Input Theme ===== */
+.input,
+.select,
+.search-input,
+.search-type-select {
+  background: var(--input-bg);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+.input:hover, .select:hover,
+.search-input:hover, .search-type-select:hover {
+  border-color: var(--border-hover);
+}
+
+.input:focus, .select:focus,
+.search-input:focus, .search-type-select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+/* ===== Button Theme ===== */
+.btn-primary {
+  background: var(--primary);
+}
+.btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+/* ===== Header Theme ===== */
+.header {
+  background: var(--bg-elevated);
+  border-bottom-color: var(--border-color);
+}
+
+.logo {
+  color: var(--text-primary);
+}
+.nav-link {
+  color: var(--text-secondary);
+}
+.nav-link:hover {
+  color: var(--primary);
+  background: var(--primary-light);
+}
+.nav-link.active {
+  background: var(--primary);
+  color: white;
+}
+
+/* ===== Recipe Card Theme ===== */
+.recipe-card-body {
+  background: var(--card-bg);
+}
+.recipe-title {
+  color: var(--text-primary);
+}
+.recipe-meta,
+.recipe-description,
+.recipe-ingredients-preview {
+  color: var(--text-secondary);
+}
+
+/* ===== Page Elements Theme ===== */
+.page-title, .search-header, .section-title {
+  color: var(--text-primary);
+}
+.page-subtitle {
+  color: var(--text-secondary);
+}
+
+.empty-state h2, .empty-state h3 {
+  color: var(--text-primary);
+}
+.empty-state p {
+  color: var(--text-secondary);
+}
+
+/* ===== Shopping Items Theme ===== */
+.shopping-item {
+  background: var(--bg-tertiary);
+}
+.shopping-item:hover {
+  background: var(--border-color);
+}
+
+/* ===== Hero Section Theme ===== */
+.hero-section {
+  background: linear-gradient(135deg, var(--hero-from), var(--hero-via), var(--hero-to));
+}
+
+/* ===== Footer Theme ===== */
+.app-footer {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+/* ===== Error & Alert Theme ===== */
+.error-message {
+  background: rgba(239, 68, 68, 0.08);
+  border-left-color: var(--danger);
+}
+
+[data-theme="dark"] .error-message {
+  background: rgba(239, 68, 68, 0.12);
+}
+
+/* ===== Loading Theme ===== */
+.loading-container p {
+  color: var(--text-primary);
+}
+
+/* ===== Favorite Button Theme ===== */
+.favorite-btn {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+}
+
+/* ===== Category Theme ===== */
+.category-title {
+  color: var(--primary);
+}
+
+/* ===== Dark Mode Difficulty Badges ===== */
+[data-theme="dark"] .difficulty-easy {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+}
+[data-theme="dark"] .difficulty-medium {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fcd34d;
+}
+[data-theme="dark"] .difficulty-hard {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+}
+
+/* ===== Comments Theme ===== */
+[data-theme="dark"] .comments-section {
+  background: var(--bg-secondary);
+}
+[data-theme="dark"] .comment-form,
+[data-theme="dark"] .comment-item {
+  background: var(--bg-tertiary);
+}
+[data-theme="dark"] .comment-form textarea {
+  background: var(--input-bg);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+[data-theme="dark"] .comment-author strong {
+  color: var(--text-primary);
+}
+[data-theme="dark"] .comment-text {
+  color: var(--text-secondary);
+}
+[data-theme="dark"] .login-prompt {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--text-secondary);
+}
+
+/* ===== Auth Theme ===== */
+[data-theme="dark"] .auth-card {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+[data-theme="dark"] .demo-credentials {
+  background: var(--bg-tertiary);
+  border-color: var(--border-color);
+}
+[data-theme="dark"] .demo-title,
+[data-theme="dark"] .demo-text strong {
+  color: var(--text-primary);
+}
+
+/* ===== Recipe Detail Theme ===== */
+[data-theme="dark"] .recipe-detail-card {
+  background: var(--bg-secondary);
+}
+[data-theme="dark"] .recipe-section {
+  border-bottom-color: var(--border-color);
+}
+[data-theme="dark"] .section-title {
+  color: var(--text-primary);
+}
+[data-theme="dark"] .ingredients-list li,
+[data-theme="dark"] .steps-list li,
+[data-theme="dark"] .description-text {
+  color: var(--text-secondary);
+}
+[data-theme="dark"] .ingredients-list li,
+[data-theme="dark"] .steps-list li {
+  border-bottom-color: var(--border-color);
+}
+[data-theme="dark"] .nutrition-item {
+  background: var(--bg-tertiary);
+}
+[data-theme="dark"] .nutrition-label {
+  color: var(--text-tertiary);
+}
+[data-theme="dark"] .nutrition-value {
+  color: var(--text-primary);
+}
+
+/* ===== Skeleton Theme ===== */
+[data-theme="dark"] .skeleton-card {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+[data-theme="dark"] .skeleton-header,
+[data-theme="dark"] .skeleton-title,
+[data-theme="dark"] .skeleton-meta-item,
+[data-theme="dark"] .skeleton-text {
+  background: linear-gradient(90deg, var(--bg-tertiary) 25%, var(--border-color) 50%, var(--bg-tertiary) 75%);
+  background-size: 200% 100%;
+}
+
+/* ===== Filter Theme ===== */
+[data-theme="dark"] .filters-panel {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+[data-theme="dark"] .filter-item input {
+  background: var(--input-bg);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+/* ===== Back Button Theme ===== */
+[data-theme="dark"] .back-btn {
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+}
+
+/* ===== Star Rating Theme ===== */
+[data-theme="dark"] .star.empty {
+  color: var(--gray-600);
+}
+[data-theme="dark"] .rating-info {
+  color: var(--text-tertiary);
+}
+
+/* ===== Animations ===== */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulse-gentle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}

@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { FaShoppingCart, FaTrash, FaPrint, FaCheck } from 'react-icons/fa';
+import { useToast } from '../context/ToastContext';
+import { useConfirm } from '../context/ConfirmContext';
 import './ShoppingList.css';
 
 function ShoppingList() {
+  const { toast } = useToast();
+  const { confirm } = useConfirm();
   const [shoppingList, setShoppingList] = useState([]);
   const [groupedItems, setGroupedItems] = useState({});
 
   useEffect(() => {
     loadShoppingList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadShoppingList = () => {
@@ -63,12 +68,20 @@ function ShoppingList() {
     groupByCategory(updated);
   };
 
-  const clearList = () => {
-    if (window.confirm('Clear entire shopping list?')) {
-      setShoppingList([]);
-      setGroupedItems({});
-      localStorage.setItem('shoppingList', '[]');
-    }
+  const clearList = async () => {
+    const ok = await confirm({
+      title: 'Clear Shopping List',
+      message: `Remove all ${shoppingList.length} items from your shopping list?`,
+      confirmText: 'Clear All',
+      cancelText: 'Keep them',
+      variant: 'warning',
+    });
+    if (!ok) return;
+
+    setShoppingList([]);
+    setGroupedItems({});
+    localStorage.setItem('shoppingList', '[]');
+    toast.success('Shopping list cleared');
   };
 
   const printList = () => {

@@ -1,0 +1,68 @@
+/* ===== Theme Toggle ===== */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: transparent;
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all var(--transition);
+  color: var(--text-primary);
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.theme-toggle:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+}
+
+.theme-toggle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+
+.theme-toggle .icon {
+  font-size: 16px;
+  transition: all var(--transition-slow);
+}
+
+.moon-icon {
+  color: #a78bfa;
+}
+
+.sun-icon {
+  color: #fbbf24;
+}
+
+.theme-label {
+  user-select: none;
+}
+
+/* ===== Mobile ===== */
+@media (max-width: 768px) {
+  .theme-label {
+    display: none;
+  }
+
+  .theme-toggle {
+    padding: 8px;
+    min-width: 38px;
+    justify-content: center;
+  }
+}
+
+/* ===== Accessibility ===== */
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.theme-toggle:active {
+  transform: scale(0.96);
+}
