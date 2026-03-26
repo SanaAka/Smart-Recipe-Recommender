@@ -46,3 +46,4 @@ logs/
 # Database
 *.sql.gz
 *.db
+backend/.coverage

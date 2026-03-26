@@ -21,6 +21,10 @@ class Database:
         self.search_cache = OrderedDict()
         # Cache for fulltext availability checks per table
         self._fts_cache = {}
+        # Cache for column existence checks (keyed by "table.column")
+        self._col_cache = {}
+        # Cache for fulltext index coverage checks (keyed by "table.(col1,col2,...)")
+        self._ftidx_cache = {}
         # MySQL connection pool
         self.pool_name = os.getenv('DB_POOL_NAME', 'recipe_pool')
         self.pool_size = int(os.getenv('DB_POOL_SIZE', '16'))
@@ -109,13 +113,18 @@ class Database:
 
     def _has_column(self, table_name: str, column_name: str) -> bool:
         """Check whether a given column exists on a table."""
+        cache_key = f"{table_name}.{column_name}"
+        if cache_key in self._col_cache:
+            return self._col_cache[cache_key]
         try:
             sql = ("SELECT COUNT(*) as cnt FROM INFORMATION_SCHEMA.COLUMNS "
                    "WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s AND COLUMN_NAME=%s")
             rows = self.execute_query(sql, (self.database, table_name, column_name), fetch=True)
-            return bool(rows and rows[0].get('cnt', 0) > 0)
+            result = bool(rows and rows[0].get('cnt', 0) > 0)
         except Exception:
-            return False
+            result = False
+        self._col_cache[cache_key] = result
+        return result
 
     def _fulltext_index_covers(self, table_name: str, columns: tuple) -> bool:
         """Return True if any FULLTEXT index on `table_name` covers the given columns.
@@ -124,6 +133,9 @@ class Database:
         checks INFORMATION_SCHEMA.STATISTICS for FULLTEXT indexes and compares the
         ordered concatenated column list against the requested columns.
         """
+        cache_key = f"{table_name}.{','.join(columns)}"
+        if cache_key in self._ftidx_cache:
+            return self._ftidx_cache[cache_key]
         try:
             # Get index->columns for FULLTEXT indexes on the table
             sql = ("SELECT INDEX_NAME, GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX SEPARATOR ',') as cols "
@@ -133,6 +145,7 @@ class Database:
             rows = self.execute_query(sql, (self.database, table_name), fetch=True)
 
             if not rows:
+                self._ftidx_cache[cache_key] = False
                 return False
 
             requested = ','.join(columns)
@@ -143,9 +156,12 @@ class Database:
                 idx_cols_set = set([c.strip().lower() for c in cols.split(',') if c.strip()])
                 req_cols_set = set([c.strip().lower() for c in requested.split(',') if c.strip()])
                 if req_cols_set.issubset(idx_cols_set):
+                    self._ftidx_cache[cache_key] = True
                     return True
+            self._ftidx_cache[cache_key] = False
             return False
         except Exception:
+            self._ftidx_cache[cache_key] = False
             return False
 
     def execute_query(self, query, params=None, fetch=False):
@@ -500,7 +516,9 @@ class Database:
 
             # Process results
             for recipe in results:
+                recipe['ingredients'] = recipe.get('ingredients', '') or ''
                 recipe['ingredients'] = recipe['ingredients'].split('|') if recipe['ingredients'] else []
+                recipe['tags'] = recipe.get('tags', '') or ''
                 recipe['tags'] = recipe['tags'].split('|') if recipe['tags'] else []
 
             # Cache the results with LRU eviction

@@ -82,11 +82,13 @@ class TestSearchRecipes:
         with patch.object(mock_db, 'execute_query', return_value=mock_result):
             # First call
             results1 = mock_db.search_recipes('test', 'name')
+            call_count_after_first = mock_db.execute_query.call_count
+            
             # Second call should use cache
             results2 = mock_db.search_recipes('test', 'name')
             
-            # execute_query should only be called once
-            assert mock_db.execute_query.call_count == 1
+            # execute_query should not be called again for the cached second search
+            assert mock_db.execute_query.call_count == call_count_after_first
 
 
 class TestGetRecipeById:

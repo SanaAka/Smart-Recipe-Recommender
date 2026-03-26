@@ -284,7 +284,7 @@ def login():
         if not user:
             logger.warning(f"Failed login attempt for: {data.username}")
             return jsonify({
-                'error': 'Invalid username or password',
+                'error': 'Invalid credentials',
                 'code': 'INVALID_CREDENTIALS'
             }), 401
         

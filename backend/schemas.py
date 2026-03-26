@@ -2,6 +2,7 @@
 Request validation schemas using Pydantic
 Provides type-safe input validation for all API endpoints
 """
+import re
 from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator
 from enum import Enum
@@ -59,8 +60,10 @@ class RecommendationRequest(BaseModel):
         """Sanitize text input"""
         if not v:
             return ''
+        # Strip HTML tags first to remove patterns like <script>...</script>
+        no_html = re.sub(r'<[^>]+>', '', v)
         # Remove potentially dangerous characters
-        sanitized = ''.join(c for c in v if c.isalnum() or c in (' ', '-', '_'))
+        sanitized = ''.join(c for c in no_html if c.isalnum() or c in (' ', '-', '_'))
         return sanitized.strip()
 
 
